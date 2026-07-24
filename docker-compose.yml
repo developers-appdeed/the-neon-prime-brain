@@ -3,8 +3,10 @@
 services:
   brain:
     build: .
-    ports:
-      - "8000:8000"
+    # No host port mapping — Coolify itself uses host :8000.
+    # The brain is reached on the coolify docker network as brain:8000.
+    expose:
+      - "8000"
     environment:
       BRAIN_HOST: "0.0.0.0"
       BRAIN_PORT: "8000"
