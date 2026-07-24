@@ -32,6 +32,21 @@ class BrainServer:
 
     def query_graph(self, question: str, repo: str | None = None,
                     mode: str = "bfs", depth: int = 3, token_budget: int = 2000) -> str:
+        import time
+        from brain import metrics
+        t0 = time.monotonic()
+        try:
+            return self._query_graph_impl(question, repo, mode, depth, token_budget)
+        finally:
+            metrics.observe_query(
+                repo=repo or "all",
+                tool="query_graph",
+                seconds=time.monotonic() - t0,
+            )
+
+    def _query_graph_impl(self, question: str, repo: str | None = None,
+                          mode: str = "bfs", depth: int = 3,
+                          token_budget: int = 2000) -> str:
         terms = _tokenize(question)
         if repo:
             if repo not in self.reg.graphs:
@@ -130,11 +145,47 @@ class BrainServer:
             })
         return out
 
+    def _graph_gauge_rows(self) -> list[dict]:
+        """Build the list of {repo, nodes, memory_entries} for the metrics gauges.
+
+        Node count comes from the loaded graph; memory_entries is the number of
+        ``*.md`` files in the repo's memory directory (0 if absent).
+        """
+        rows = []
+        for repo_info in self.list_repos():
+            repo = repo_info["name"]
+            mem_dir = self.mem.base / repo
+            memory_entries = len(list(mem_dir.glob("*.md"))) if mem_dir.exists() else 0
+            rows.append({
+                "repo": repo,
+                "nodes": repo_info.get("nodes", 0),
+                "memory_entries": memory_entries,
+            })
+        return rows
+
     def remember(self, question: str, answer: str, repo: str,
                  nodes: list[str] | None = None, mtype: str = "query") -> str:
         return self.mem.remember(repo, question, answer, nodes, mtype)
 
     def refresh(self, repo: str, source: str = "manual") -> dict:
+        import time
+        from brain import metrics
+        t0 = time.monotonic()
+        result = self._refresh_impl(repo, source)
+        if isinstance(result, dict) and result.get("error"):
+            metrics.observe_refresh_failed(repo=repo)
+        else:
+            metrics.observe_refresh(repo=repo, source=source,
+                                    seconds=time.monotonic() - t0)
+            # After a successful refresh, update the gauges so the dashboard
+            # reflects the new node count immediately.
+            try:
+                metrics.set_graph_gauges(self._graph_gauge_rows())
+            except Exception:
+                pass  # metrics must never break a successful refresh
+        return result
+
+    def _refresh_impl(self, repo: str, source: str = "manual") -> dict:
         import subprocess
         from brain.config import load_config
         cfg = load_config()
@@ -195,11 +246,29 @@ def create_app():
 
     from starlette.routing import Route
     from starlette.responses import JSONResponse as StarletteJSONResponse
+    from starlette.responses import PlainTextResponse as StarlettePlainTextResponse
+    from brain import metrics
 
     async def health(_req):
         return StarletteJSONResponse({"status": "ok", "repos": brain.list_repos()})
 
+    # /metrics — Prometheus text format. Open path (auth middleware allows it).
+    # Prometheus scrapes over the internal docker network with no Bearer token.
+    async def metrics_endpoint(_req):
+        return StarlettePlainTextResponse(
+            metrics.render_metrics(), media_type="text/plain; version=0.0.4; charset=utf-8"
+        )
+
     app.router.routes.insert(0, Route("/health", health, methods=["GET"]))
+    app.router.routes.insert(0, Route("/metrics", metrics_endpoint, methods=["GET"]))
+
+    # Set the graph/memory gauges once at startup so they're non-zero before the
+    # first refresh. (brain_graph_nodes for a degraded/missing repo is stale,
+    # which is the intended signal — see metrics.set_graph_gauges docstring.)
+    try:
+        metrics.set_graph_gauges(brain._graph_gauge_rows())
+    except Exception:
+        pass  # metrics must never block startup
 
     from brain.auth import BearerAuthMiddleware
     app.add_middleware(BearerAuthMiddleware)

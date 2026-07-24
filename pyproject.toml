@@ -8,6 +8,7 @@ dependencies = [
     "graphifyy>=0.4.23",
     "uvicorn>=0.30.0",
     "starlette>=0.37.0",
+    "prometheus-client>=0.20.0",
 ]
 
 [project.optional-dependencies]
