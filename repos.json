@@ -1,0 +1,36 @@
+{
+  "repos": {
+    "store": {
+      "git_url": "https://github.com/developers-appdeed/the-neon-prime.git",
+      "path": "/repos/the-neon-prime",
+      "graph": "/graphs/store/graphify-out/graph.json",
+      "branches": ["dev", "prod"]
+    },
+    "api": {
+      "git_url": "https://github.com/developers-appdeed/the-neon-prime-fastify.git",
+      "path": "/repos/the-neon-prime-fastify",
+      "graph": "/graphs/api/graphify-out/graph.json",
+      "branches": ["dev", "prod"]
+    },
+    "admin": {
+      "git_url": "https://github.com/developers-appdeed/the-neon-prime-admin.git",
+      "path": "/repos/the-neon-prime-admin",
+      "graph": "/graphs/admin/graphify-out/graph.json",
+      "branches": ["dev", "prod"]
+    },
+    "flutter": {
+      "git_url": "https://github.com/developers-appdeed/the-neon-prime-ops.git",
+      "path": "/repos/the-neon-prime-ops",
+      "graph": "/graphs/flutter/graphify-out/graph.json",
+      "branches": ["dev", "prod"]
+    }
+  },
+  "coolify_uuid_map": {
+    "zb3fxwndnst8a79vw8vz48zz": "store-dev",
+    "adnl56hdy6ag7svpms8nd5f6": "store-prod",
+    "s12g5qea0omu7q4zfnfl1bxc": "api-dev",
+    "gzyu79tl2zvjxm81bn4aa2f0": "api-prod",
+    "tunbxqypc56yxz158r18no32": "admin-dev",
+    "e11l7939n430dlmvlekqqm6z": "admin-prod"
+  }
+}

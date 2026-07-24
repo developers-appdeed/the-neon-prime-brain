@@ -1,0 +1,17 @@
+# Brain MCP server — the digital brain (graphify multi-graph knowledge query).
+# Deployed via Coolify. Local dev: `docker compose up` from this dir.
+services:
+  brain:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      BRAIN_HOST: "0.0.0.0"
+      BRAIN_PORT: "8000"
+      BRAIN_BEARER_TOKEN: "${BRAIN_BEARER_TOKEN}"
+      BRAIN_MEMORY_DIR: "/graphs/memory"
+      BRAIN_REPOS_FILE: "/app/repos.json"
+    volumes:
+      - ./data/repos:/repos
+      - ./data/graphs:/graphs
+    restart: unless-stopped
