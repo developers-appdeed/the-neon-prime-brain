@@ -3,6 +3,12 @@ import os
 import networkx as nx
 from brain.graphs import GraphRegistry
 from brain.memory import MemoryStore
+from brain.logging import (
+    configure_observability,
+    get_logger,
+    span,
+    shutdown as observability_shutdown,
+)
 
 
 def _tokenize(question: str) -> list[str]:
@@ -36,7 +42,8 @@ class BrainServer:
         from brain import metrics
         t0 = time.monotonic()
         try:
-            return self._query_graph_impl(question, repo, mode, depth, token_budget)
+            with span("brain.query_graph", repo=repo or "all", mode=mode):
+                return self._query_graph_impl(question, repo, mode, depth, token_budget)
         finally:
             metrics.observe_query(
                 repo=repo or "all",
@@ -171,9 +178,13 @@ class BrainServer:
         import time
         from brain import metrics
         t0 = time.monotonic()
-        result = self._refresh_impl(repo, source)
+        log = get_logger()
+        with span("brain.refresh", repo=repo, source=source):
+            result = self._refresh_impl(repo, source)
         if isinstance(result, dict) and result.get("error"):
             metrics.observe_refresh_failed(repo=repo)
+            log.warn("brain refresh failed", repo=repo, source=source,
+                     error=result["error"])
         else:
             metrics.observe_refresh(repo=repo, source=source,
                                     seconds=time.monotonic() - t0)
@@ -183,6 +194,7 @@ class BrainServer:
                 metrics.set_graph_gauges(self._graph_gauge_rows())
             except Exception:
                 pass  # metrics must never break a successful refresh
+            log.info("brain refresh ok", repo=repo, source=source)
         return result
 
     def _refresh_impl(self, repo: str, source: str = "manual") -> dict:
@@ -210,6 +222,12 @@ class BrainServer:
 
 def create_app():
     """Build the ASGI app: MCP tools over streamable-http + /health."""
+    configure_observability(
+        service=os.environ.get("OTEL_SERVICE_NAME", "brain"),
+        environment=os.environ.get("OBSERVABILITY_ENV", "production"),
+    )
+    log = get_logger()
+    log.info("brain starting")
     from brain.config import load_config
     cfg = load_config()
     reg = GraphRegistry()
@@ -272,6 +290,20 @@ def create_app():
 
     from brain.auth import BearerAuthMiddleware
     app.add_middleware(BearerAuthMiddleware)
+
+    # Flush pending OTel spans on SIGTERM/SIGINT so traces aren't dropped on a
+    # graceful shutdown. Wrapped defensively: signal.signal only works in the
+    # main thread (some test runners call create_app() off-main-thread).
+    import signal as _signal
+
+    def _flush_on_exit(*_args):
+        observability_shutdown()
+
+    for _sig in (_signal.SIGTERM, _signal.SIGINT):
+        try:
+            _signal.signal(_sig, _flush_on_exit)
+        except (ValueError, OSError):
+            pass
     return app
 
 
