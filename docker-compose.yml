@@ -1,10 +1,16 @@
 # Brain MCP server — the digital brain (graphify multi-graph knowledge query).
 # Deployed via Coolify. Local dev: `docker compose up` from this dir.
+# The coolify network is declared external so the service name "brain"
+# resolves for other Coolify apps (e.g. fastify reaches it as http://brain:8000).
+networks:
+  coolify:
+    external: true
+
 services:
   brain:
     build: .
-    # No host port mapping — Coolify itself uses host :8000.
-    # The brain is reached on the coolify docker network as brain:8000.
+    networks:
+      - coolify
     expose:
       - "8000"
     environment:
