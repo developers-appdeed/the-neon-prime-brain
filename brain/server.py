@@ -9,6 +9,8 @@ from brain.logging import (
     span,
     shutdown as observability_shutdown,
 )
+from brain.observability import RequestContextMiddleware, configure_otel
+from opentelemetry.instrumentation.starlette import StarletteInstrumentor
 
 
 def _tokenize(question: str) -> list[str]:
@@ -226,6 +228,10 @@ def create_app():
         service=os.environ.get("OTEL_SERVICE_NAME", "brain"),
         environment=os.environ.get("OBSERVABILITY_ENV", "production"),
     )
+    configure_otel(
+        service_name=os.environ.get("OTEL_SERVICE_NAME", "brain"),
+        environment=os.environ.get("OBSERVABILITY_ENV", "production"),
+    )
     log = get_logger()
     log.info("brain starting")
     from brain.config import load_config
@@ -290,6 +296,7 @@ def create_app():
 
     from brain.auth import BearerAuthMiddleware
     app.add_middleware(BearerAuthMiddleware)
+    app.add_middleware(RequestContextMiddleware)
 
     # Flush pending OTel spans on SIGTERM/SIGINT so traces aren't dropped on a
     # graceful shutdown. Wrapped defensively: signal.signal only works in the
@@ -304,6 +311,7 @@ def create_app():
             _signal.signal(_sig, _flush_on_exit)
         except (ValueError, OSError):
             pass
+    StarletteInstrumentor.instrument_app(app)
     return app
 
 
