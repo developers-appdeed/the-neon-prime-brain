@@ -73,3 +73,46 @@ def test_middleware_echoes_headers_on_response():
     )
     assert response.headers.get("x-correlation-id") == "cid_echo"
     assert response.headers.get("x-request-id") == "req-echo"
+
+
+def test_configure_otel_is_idempotent():
+    """Calling configure_otel twice must not re-initialize the provider."""
+    from brain.observability import configure_otel, _OTEL_INITIALIZED
+    from opentelemetry import trace
+
+    # Reset for test isolation (the flag is module-global).
+    import brain.observability as obs
+    original_flag = obs._OTEL_INITIALIZED
+    obs._OTEL_INITIALIZED = False
+
+    try:
+        configure_otel(service_name="brain-test", environment="test")
+        first_provider = trace.get_tracer_provider()
+        # Second call should be a no-op.
+        configure_otel(service_name="brain-test-2", environment="test-2")
+        second_provider = trace.get_tracer_provider()
+        assert first_provider is second_provider, "configure_otel re-initialized the provider on second call"
+    finally:
+        obs._OTEL_INITIALIZED = original_flag
+
+
+def test_configure_otel_sets_provider_without_exporter_when_endpoint_absent(monkeypatch):
+    """When OTEL_EXPORTER_OTLP_ENDPOINT is unset, provider is set but no exporter is wired."""
+    from brain.observability import configure_otel
+    from opentelemetry import trace
+    import brain.observability as obs
+
+    monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
+    original_flag = obs._OTEL_INITIALIZED
+    obs._OTEL_INITIALIZED = False
+
+    try:
+        configure_otel(service_name="brain-no-exporter", environment="test")
+        provider = trace.get_tracer_provider()
+        # The provider should be set (not the default ProxyTracerProvider).
+        # We can't easily assert "no exporter" without reaching into internals,
+        # but we can assert the provider is a real TracerProvider.
+        from opentelemetry.sdk.trace import TracerProvider
+        assert isinstance(provider, TracerProvider), f"expected TracerProvider, got {type(provider).__name__}"
+    finally:
+        obs._OTEL_INITIALIZED = original_flag

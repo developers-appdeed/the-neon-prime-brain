@@ -41,7 +41,7 @@ def configure_otel(*, service_name: str = "brain", environment: str = "productio
     resource = Resource.create(
         {
             "service.name": service_name,
-            "service.environment": environment,
+            "deployment.environment": environment,
         }
     )
     provider = TracerProvider(resource=resource)

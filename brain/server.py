@@ -10,7 +10,6 @@ from brain.logging import (
     shutdown as observability_shutdown,
 )
 from brain.observability import RequestContextMiddleware, configure_otel
-from opentelemetry.instrumentation.starlette import StarletteInstrumentor
 
 
 def _tokenize(question: str) -> list[str]:
@@ -224,14 +223,10 @@ class BrainServer:
 
 def create_app():
     """Build the ASGI app: MCP tools over streamable-http + /health."""
-    configure_observability(
-        service=os.environ.get("OTEL_SERVICE_NAME", "brain"),
-        environment=os.environ.get("OBSERVABILITY_ENV", "production"),
-    )
-    configure_otel(
-        service_name=os.environ.get("OTEL_SERVICE_NAME", "brain"),
-        environment=os.environ.get("OBSERVABILITY_ENV", "production"),
-    )
+    service = os.environ.get("OTEL_SERVICE_NAME", "brain")
+    environment = os.environ.get("OBSERVABILITY_ENV", "production")
+    configure_observability(service=service, environment=environment)
+    configure_otel(service_name=service, environment=environment)
     log = get_logger()
     log.info("brain starting")
     from brain.config import load_config
@@ -311,6 +306,7 @@ def create_app():
             _signal.signal(_sig, _flush_on_exit)
         except (ValueError, OSError):
             pass
+    from opentelemetry.instrumentation.starlette import StarletteInstrumentor
     StarletteInstrumentor.instrument_app(app)
     return app
 
