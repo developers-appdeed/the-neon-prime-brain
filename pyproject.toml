@@ -9,18 +9,13 @@ dependencies = [
     "uvicorn>=0.30.0",
     "starlette>=0.37.0",
     "prometheus-client>=0.20.0",
-]
-
-[project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
-# Optional: enables real OTel OTLP span export from brain.logging.span().
-# Without this extra, span() is a no-op context manager and trace context is
-# still propagated into logs via the W3C traceparent header. See OBSERVABILITY.md.
-otel = [
     "opentelemetry-sdk>=1.27.0",
     "opentelemetry-exporter-otlp>=1.27.0",
     "opentelemetry-instrumentation-starlette>=0.48b0",
 ]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
